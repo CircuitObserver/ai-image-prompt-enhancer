@@ -1,6 +1,5 @@
 import streamlit as st
 from huggingface_hub import InferenceClient
-from st_copy_button import st_copy_button  # Import the new component
 import os
 import re
 
@@ -25,7 +24,7 @@ SYSTEM_PROMPT = (
     "You are an expert AI Image Prompt Engineer. Expand the user input into a professional-grade prompt. "
     "Structure: Subject, Action, Environment, Lighting, Style, Composition, Textures.\n"
     "DO NOT use square brackets []. DO NOT use labels like 'Subject:'. "
-    "Provide one continuous, highly descriptive paragraph."
+    "Provide one continuous, highly descriptive paragraph. No filler."
 )
 
 def clean_prompt(text):
@@ -46,7 +45,7 @@ with st.sidebar:
 with st.container():
     col_in, col_btn = st.columns([4, 1])
     with col_in:
-        user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A neon samurai", label_visibility="collapsed")
+        user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A cosmic lighthouse", label_visibility="collapsed")
     with col_btn:
         generate_clicked = st.button("Enhance ✨", use_container_width=True, type="primary")
 
@@ -63,9 +62,11 @@ if generate_clicked and user_input:
                 temperature=temperature
             )
             final_result = clean_prompt(response.choices[0].message.content)
+            # Add to history
             st.session_state.prompt_history.insert(0, {"original": user_input, "enhanced": final_result})
         except Exception as e:
-            st.error(f"API Error: {e}")
+            # Check if it's a 401 (token issue) or 429 (rate limit)
+            st.error(f"Something went wrong: {e}")
 
 # --- PROMPT HISTORY GRID ---
 st.divider()
@@ -75,20 +76,14 @@ if not st.session_state.prompt_history:
     st.info("Your prompts will appear here.")
 else:
     for idx, item in enumerate(st.session_state.prompt_history):
-        # Using a unique key for each button is vital in Streamlit loops
         with st.expander(f"Prompt {len(st.session_state.prompt_history) - idx}: {item['original']}", expanded=(idx == 0)):
-            grid_col_text, grid_col_btn = st.columns([9, 1])
+            # Show the prompt in a code block which has its own built-in copy button!
+            # This is the most reliable way in Streamlit currently.
+            st.code(item['enhanced'], language="text")
             
-            with grid_col_text:
-                st.write(item['enhanced'])
-            
-            with grid_col_btn:
-                # This replaces the broken st.copy_to_clipboard
-                st_copy_button(
-                    text=item['enhanced'],
-                    label="📋",
-                    key=f"copy_{idx}" # Unique key for each instance
-                )
+            # If you still want a custom button, we use the text_area approach 
+            # as it's the most compatible across all browsers.
+            st.caption("Click the icon in the top right of the box above to copy.")
 
 st.divider()
-st.caption("2026 Edition | Optimized for Qwen 2.5-72B")
+st.caption("Running on Python 3.14 | Qwen 2.5-72B")
