@@ -1,89 +1,70 @@
 import streamlit as st
-from huggingface_hub import InferenceClient
+from openai import OpenAI
 import os
 import re
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="AI Prompt Architect", page_icon="🎨", layout="wide")
 
-# --- SESSION STATE INITIALIZATION ---
 if "prompt_history" not in st.session_state:
     st.session_state.prompt_history = []
 
-# --- API SETUP ---
-hf_token = st.secrets.get("HF_TOKEN") or os.getenv("HF_TOKEN")
+# --- API SETUP (OpenRouter) ---
+# Replace HF_TOKEN with OPENROUTER_API_KEY in your Streamlit Secrets
+api_key = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
 
-if not hf_token:
-    st.error("Missing HF_TOKEN in Secrets.")
+if not api_key:
+    st.error("Please add 'OPENROUTER_API_KEY' to your Secrets.")
     st.stop()
 
-client = InferenceClient(api_key=hf_token)
-
-# --- REFINED SYSTEM PROMPT ---
-SYSTEM_PROMPT = (
-    "You are an expert AI Image Prompt Engineer. Expand the user input into a professional-grade prompt. "
-    "Structure: Subject, Action, Environment, Lighting, Style, Composition, Textures.\n"
-    "DO NOT use square brackets []. DO NOT use labels like 'Subject:'. "
-    "Provide one continuous, highly descriptive paragraph. No filler."
+# OpenRouter uses the OpenAI-compatible SDK
+client = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=api_key,
 )
 
-def clean_prompt(text):
-    return re.sub(r'[\[\]]', '', text).strip()
+SYSTEM_PROMPT = (
+    "You are an expert AI Image Prompt Engineer. Expand the user input into a professional-grade prompt. "
+    "Structure: Subject, Action, Environment, Lighting, Style, Composition, Textures. "
+    "DO NOT use square brackets [] or labels. Provide one continuous, descriptive paragraph."
+)
 
-# --- UI LAYOUT ---
-st.title("🎨 AI Prompt Architect")
-st.markdown("Generate and manage high-fidelity image prompts.")
+# --- UI ---
+st.title("🎨 AI Prompt Architect (Free Edition)")
 
 with st.sidebar:
     st.header("Settings")
-    temperature = st.slider("Creativity", 0.0, 1.0, 0.7)
+    # Using a free-tier model from OpenRouter
+    model_choice = st.selectbox("Select Model", 
+                                ["qwen/qwen-2.5-72b-instruct:free", "google/gemini-2.0-flash-exp:free"])
     if st.button("Clear History"):
         st.session_state.prompt_history = []
         st.rerun()
 
-# --- MAIN INPUT AREA ---
 with st.container():
     col_in, col_btn = st.columns([4, 1])
     with col_in:
-        user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A cosmic lighthouse", label_visibility="collapsed")
+        user_input = st.text_input("Enter idea:", placeholder="e.g., A steampunk owl", label_visibility="collapsed")
     with col_btn:
         generate_clicked = st.button("Enhance ✨", use_container_width=True, type="primary")
 
 if generate_clicked and user_input:
-    with st.spinner("Architecting..."):
+    with st.spinner("Generating with Free Tier..."):
         try:
-            response = client.chat.completions.create(
-                model="Qwen/Qwen2.5-72B-Instruct",
+            completion = client.chat.completions.create(
+                model=model_choice,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": f"Enhance: {user_input}"}
-                ],
-                max_tokens=400,
-                temperature=temperature
+                ]
             )
-            final_result = clean_prompt(response.choices[0].message.content)
-            # Add to history
+            final_result = completion.choices[0].message.content.strip()
             st.session_state.prompt_history.insert(0, {"original": user_input, "enhanced": final_result})
         except Exception as e:
-            # Check if it's a 401 (token issue) or 429 (rate limit)
-            st.error(f"Something went wrong: {e}")
+            st.error(f"Error: {e}")
 
-# --- PROMPT HISTORY GRID ---
+# --- HISTORY ---
 st.divider()
-st.subheader("Prompt History")
-
-if not st.session_state.prompt_history:
-    st.info("Your prompts will appear here.")
-else:
-    for idx, item in enumerate(st.session_state.prompt_history):
-        with st.expander(f"Prompt {len(st.session_state.prompt_history) - idx}: {item['original']}", expanded=(idx == 0)):
-            # Show the prompt in a code block which has its own built-in copy button!
-            # This is the most reliable way in Streamlit currently.
-            st.code(item['enhanced'], language="text")
-            
-            # If you still want a custom button, we use the text_area approach 
-            # as it's the most compatible across all browsers.
-            st.caption("Click the icon in the top right of the box above to copy.")
-
-st.divider()
-st.caption("Running on Python 3.14 | Qwen 2.5-72B")
+for idx, item in enumerate(st.session_state.prompt_history):
+    with st.expander(f"{item['original']}", expanded=(idx == 0)):
+        st.code(item['enhanced'], language="text")
