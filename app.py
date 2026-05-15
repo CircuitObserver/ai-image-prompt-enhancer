@@ -1,44 +1,49 @@
 import streamlit as st
 from huggingface_hub import InferenceClient
 import os
+import re
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="AI Prompt Architect", page_icon="🎨")
+st.set_page_config(page_title="AI Prompt Architect", page_icon="🎨", layout="centered")
 
 # --- API SETUP ---
-# On Streamlit Cloud, add HF_TOKEN to "Settings > Secrets"
-# Locally, it will look for it in your environment variables
 hf_token = st.secrets.get("HF_TOKEN") or os.getenv("HF_TOKEN")
 
 if not hf_token:
-    st.error("Please add your Hugging Face API Token to continue.")
+    st.error("Please add your Hugging Face API Token (HF_TOKEN) to Streamlit Secrets.")
     st.stop()
 
 client = InferenceClient(api_key=hf_token)
 
-# --- SYSTEM PROMPT ---
+# --- REFINED SYSTEM PROMPT ---
+# We now explicitly tell the model NOT to use brackets in the output.
 SYSTEM_PROMPT = (
     "You are an expert AI Image Prompt Engineer. Your task is to take a basic user input "
-    "and expand it into a high-detail, professional-grade prompt for image generation models. "
-    "You MUST follow this exact structure for every response:\n\n"
-    "[Subject + Key Descriptors], [Action/Pose/Expression], [Environment/Setting + Atmosphere], "
-    "[Lighting + Shading + Color Scheme/Gradients + Mood], [Style/Medium + Artistic References], "
-    "[Composition + Perspective + Camera/Lens Details], [Textures/Materials + Quality Enhancers + Technical Specs]\n\n"
-    "Stay precise to what the user requested but ensure every bracketed section is filled with "
-    "vivid, descriptive detail. Do not include any conversational filler; output ONLY the enhanced prompt."
+    "and expand it into a high-detail, professional-grade prompt.\n\n"
+    "Structure the output exactly like this, but DO NOT include the square brackets or labels in the final text:\n"
+    "Subject + Key Descriptors, Action/Pose/Expression, Environment/Setting + Atmosphere, "
+    "Lighting + Shading + Color Scheme, Style/Medium, Composition + Camera Details, Textures + Technical Specs.\n\n"
+    "Ensure the result is a single, fluid paragraph of descriptive tags and phrases. "
+    "Output ONLY the enhanced prompt. No conversational filler, no headers, and NO square brackets."
 )
+
+def clean_prompt(text):
+    """
+    Post-processing to ensure no brackets remain if the LLM ignores instructions.
+    """
+    # Removes [ and ] characters
+    return re.sub(r'[\[\]]', '', text).strip()
 
 # --- UI LAYOUT ---
 st.title("🎨 AI Prompt Architect")
-st.markdown("Expand simple ideas into professional-grade image prompts using **Qwen 2.5-72B**.")
+st.markdown("Convert simple ideas into detailed prompts for high-end image generation.")
 
-user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A cat")
+user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A futuristic cyberpunk cat")
 
-if st.button("Enhance Prompt"):
+if st.button("Enhance Prompt", type="primary"):
     if user_input:
-        with st.spinner("Qwen is architecting your prompt..."):
+        with st.spinner("Refining your vision..."):
             try:
-                # Using the latest 2026 Inference Client chat completion method
                 response = client.chat.completions.create(
                     model="Qwen/Qwen2.5-72B-Instruct",
                     messages=[
@@ -49,17 +54,23 @@ if st.button("Enhance Prompt"):
                     temperature=0.7
                 )
                 
-                enhanced_prompt = response.choices[0].message.content
+                raw_content = response.choices[0].message.content
+                # Apply the cleaning function to strip any brackets
+                final_prompt = clean_prompt(raw_content)
                 
-                st.subheader("Enhanced Prompt:")
-                st.code(enhanced_prompt, language="text")
-                st.button("Copy to Clipboard", on_click=lambda: st.write(f"Prompt copied! (Manual copy required in some browsers)"))
+                st.subheader("Your Enhanced Prompt:")
+                # Use a text area so users can easily select and copy the text
+                st.text_area(label="Copy-paste this into your image generator:", 
+                             value=final_prompt, 
+                             height=200)
+                
+                st.success("Prompt generated successfully!")
                 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
     else:
-        st.warning("Please enter a prompt first!")
+        st.warning("Please enter a subject first.")
 
 # --- FOOTER ---
 st.divider()
-st.caption("Powered by Qwen/Qwen2.5-72B-Instruct via Hugging Face Inference.")
+st.caption("2026 Edition | Optimized for Qwen 2.5-72B & Hugging Face Inference Endpoints")
