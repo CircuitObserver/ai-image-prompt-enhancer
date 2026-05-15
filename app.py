@@ -1,5 +1,6 @@
 import streamlit as st
 from huggingface_hub import InferenceClient
+from st_copy_button import st_copy_button  # Import the new component
 import os
 import re
 
@@ -7,7 +8,6 @@ import re
 st.set_page_config(page_title="AI Prompt Architect", page_icon="🎨", layout="wide")
 
 # --- SESSION STATE INITIALIZATION ---
-# This keeps the history alive until the tab is closed/refreshed
 if "prompt_history" not in st.session_state:
     st.session_state.prompt_history = []
 
@@ -35,10 +35,9 @@ def clean_prompt(text):
 st.title("🎨 AI Prompt Architect")
 st.markdown("Generate and manage high-fidelity image prompts.")
 
-# Sidebar for controls or info
 with st.sidebar:
     st.header("Settings")
-    temperature = st.slider("Creativity (Temperature)", 0.0, 1.0, 0.7)
+    temperature = st.slider("Creativity", 0.0, 1.0, 0.7)
     if st.button("Clear History"):
         st.session_state.prompt_history = []
         st.rerun()
@@ -47,7 +46,7 @@ with st.sidebar:
 with st.container():
     col_in, col_btn = st.columns([4, 1])
     with col_in:
-        user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A neon samurai in rain", label_visibility="collapsed")
+        user_input = st.text_input("Enter your basic idea:", placeholder="e.g., A neon samurai", label_visibility="collapsed")
     with col_btn:
         generate_clicked = st.button("Enhance ✨", use_container_width=True, type="primary")
 
@@ -63,12 +62,8 @@ if generate_clicked and user_input:
                 max_tokens=400,
                 temperature=temperature
             )
-            
             final_result = clean_prompt(response.choices[0].message.content)
-            
-            # Save to history (at the top)
             st.session_state.prompt_history.insert(0, {"original": user_input, "enhanced": final_result})
-            
         except Exception as e:
             st.error(f"API Error: {e}")
 
@@ -77,10 +72,10 @@ st.divider()
 st.subheader("Prompt History")
 
 if not st.session_state.prompt_history:
-    st.info("Your generated prompts will appear here in a grid.")
+    st.info("Your prompts will appear here.")
 else:
-    # Displaying as a grid
     for idx, item in enumerate(st.session_state.prompt_history):
+        # Using a unique key for each button is vital in Streamlit loops
         with st.expander(f"Prompt {len(st.session_state.prompt_history) - idx}: {item['original']}", expanded=(idx == 0)):
             grid_col_text, grid_col_btn = st.columns([9, 1])
             
@@ -88,9 +83,12 @@ else:
                 st.write(item['enhanced'])
             
             with grid_col_btn:
-                # The modern 2026 way to copy directly to user clipboard
-                st.copy_to_clipboard(item['enhanced'], help="Copy to clipboard", icon="📋")
+                # This replaces the broken st.copy_to_clipboard
+                st_copy_button(
+                    text=item['enhanced'],
+                    label="📋",
+                    key=f"copy_{idx}" # Unique key for each instance
+                )
 
-# --- FOOTER ---
 st.divider()
-st.caption("Using Qwen2.5-72B-Instruct | Data is cleared on page refresh.")
+st.caption("2026 Edition | Optimized for Qwen 2.5-72B")
